@@ -1,6 +1,6 @@
 module VMTranslator exposing (translate)
 
-import Parser exposing ((|.), (|=), Parser, int, keyword, map, oneOf, spaces, succeed)
+import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed, variable)
 import VMCommand
     exposing
         ( BinaryArithmeticCmd(..)
@@ -18,12 +18,7 @@ translate rawInput =
     rawInput
         |> String.trim
         |> String.split "\n"
-        |> List.map
-            (\line ->
-                line
-                    |> String.toLower
-                    |> String.trim
-            )
+        |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
         |> List.indexedMap
@@ -56,6 +51,9 @@ translateLine index line =
                         , andParser
                         , orParser
                         , notParser
+                        , labelParser
+                        , ifGotoParser
+                        , gotoParser
                         ]
                     )
     in
@@ -168,3 +166,27 @@ notParser : Parser VMCommand
 notParser =
     succeed (UnaryArithmetic Not)
         |. keyword "not"
+
+
+labelParser : Parser VMCommand
+labelParser =
+    succeed Label
+        |. keyword "label"
+        |. spaces
+        |= getChompedString (chompWhile Char.isAlphaNum)
+
+
+ifGotoParser : Parser VMCommand
+ifGotoParser =
+    succeed IfGoto
+        |. keyword "if-goto"
+        |. spaces
+        |= getChompedString (chompWhile Char.isAlphaNum)
+
+
+gotoParser : Parser VMCommand
+gotoParser =
+    succeed Goto
+        |. keyword "goto"
+        |. spaces
+        |= getChompedString (chompWhile Char.isAlphaNum)

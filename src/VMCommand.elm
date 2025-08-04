@@ -40,6 +40,9 @@ type VMCommand
     | Pop Segment Int
     | UnaryArithmetic UnaryArithmeticCmd
     | BinaryArithmetic BinaryArithmeticCmd
+    | Label String
+    | IfGoto String
+    | Goto String
 
 
 segToStr : Segment -> String
@@ -156,6 +159,15 @@ getCommentLine command =
         Push seg i ->
             commentCode ++ "push " ++ segToStr seg ++ " " ++ String.fromInt i
 
+        Label labelName ->
+            commentCode ++ "label " ++ labelName
+
+        IfGoto labelName ->
+            commentCode ++ "if-goto " ++ labelName
+
+        Goto labelName ->
+            commentCode ++ "goto " ++ labelName
+
 
 getCpuCommands : VMCommand -> Int -> List String
 getCpuCommands vmCommand index =
@@ -173,6 +185,24 @@ getCpuCommands vmCommand index =
                     , "A=M-1"
                     , "M=!M"
                     ]
+
+        Label labelName ->
+            [ "(" ++ labelName ++ ")" ]
+
+        IfGoto labelName ->
+            [ "@0"
+            , "A=M-1"
+            , "D=M // D = *(SP - 1)"
+            , "@0"
+            , "M=M-1 // SP--"
+            , "@" ++ labelName
+            , "D;JGT"
+            ]
+
+        Goto labelName ->
+            [ "@" ++ labelName
+            , "0;JMP"
+            ]
 
         BinaryArithmetic op ->
             -- first operand is stored to R14
