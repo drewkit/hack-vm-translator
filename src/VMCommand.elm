@@ -43,6 +43,9 @@ type VMCommand
     | Label String
     | IfGoto String
     | Goto String
+    | FunctionDeclaration String Int
+    | FunctionCall String Int
+    | FunctionReturn
 
 
 segToStr : Segment -> String
@@ -168,6 +171,15 @@ getCommentLine command =
         Goto labelName ->
             commentCode ++ "goto " ++ labelName
 
+        FunctionCall fName nArgs ->
+            commentCode ++ "call " ++ fName ++ " " ++ String.fromInt nArgs
+
+        FunctionDeclaration fName nVars ->
+            commentCode ++ "function " ++ fName ++ " " ++ String.fromInt nVars
+
+        FunctionReturn ->
+            commentCode ++ "return"
+
 
 getCpuCommands : VMCommand -> Int -> List String
 getCpuCommands vmCommand index =
@@ -202,6 +214,78 @@ getCpuCommands vmCommand index =
         Goto labelName ->
             [ "@" ++ labelName
             , "0;JMP"
+            ]
+
+        FunctionDeclaration fName nVars ->
+            let
+                initVar =
+                    [ "@0"
+                    , "A=M"
+                    , "M=0 // *SP = 0"
+                    , "@0"
+                    , "M=M+1 // SP++"
+                    ]
+
+                initVars : Int -> List String
+                initVars n =
+                    List.range 0 (n - 1)
+                        |> List.foldl (\_ rest -> initVar ++ rest) []
+            in
+            ("(" ++ fName ++ ")") :: initVars nVars
+
+        FunctionCall fName nArgs ->
+            let
+                returnLabel =
+                    fName ++ "$ret. " ++ String.fromInt index
+
+                pushSavedSegment : Segment -> List String
+                pushSavedSegment seg =
+                    [ "@" ++ (String.fromInt <| getSegmentBaseRegister seg)
+                    , "A=M"
+                    , "D=M"
+                    , "@0"
+                    , "A=M"
+                    , "M=D // pushed caller " ++ segToStr seg ++ " segment to stack"
+                    , "@0"
+                    , "M=M=1 // SP++"
+                    ]
+            in
+            [ "@" ++ returnLabel
+            , "D=A"
+            , "@0"
+            , "A=M"
+            , "M=D // return address pushed to stack"
+            , "@0"
+            , "M=M+1 // SP++"
+            ]
+                ++ pushSavedSegment Local
+                ++ pushSavedSegment Argument
+                ++ pushSavedSegment This
+                ++ pushSavedSegment That
+                ++ [ "@0"
+                   , "A=M"
+                   , "D=M"
+                   , "@" ++ String.fromInt (getSegmentBaseRegister Local)
+                   , "M=D // LCL = SP"
+                   , "@" ++ String.fromInt (5 + nArgs)
+                   , "D=D-A"
+                   , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+                   , "M=D // ARG = SP - 5 - nArgs"
+                   , "@" ++ fName
+                   , "0;JMP"
+                   , "(" ++ returnLabel ++ ")"
+                   ]
+
+        FunctionReturn ->
+            [ "@0"
+            , "A=M-1"
+            , "D=M"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+            , "A=M"
+            , "M=D // return value to callee"
+            , "D=A+1"
+            , "@0"
+            , "M=D // SP = returnAddress + 1"
             ]
 
         BinaryArithmetic op ->
