@@ -21,6 +21,8 @@ translate rawInput =
         |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
+        |> List.filter
+            (\line -> not <| String.startsWith "//" line)
         |> List.indexedMap
             (\i line ->
                 line
@@ -173,7 +175,7 @@ labelParser =
     succeed Label
         |. keyword "label"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
 
 
 ifGotoParser : Parser VMCommand
@@ -181,7 +183,7 @@ ifGotoParser =
     succeed IfGoto
         |. keyword "if-goto"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
 
 
 gotoParser : Parser VMCommand
@@ -189,4 +191,9 @@ gotoParser =
     succeed Goto
         |. keyword "goto"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+
+
+charIsAlphaNumorUnderscore : Char -> Bool
+charIsAlphaNumorUnderscore c =
+    Char.isAlphaNum c || c == '_'

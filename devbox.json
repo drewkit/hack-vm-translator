@@ -3,7 +3,8 @@
   "packages": [
     "nodejs_24@latest",
     "elmPackages.elm-pages@latest",
-    "git@latest"
+    "git@latest",
+    "neovim@latest"
   ],
   "shell": {
     "init_hook": [

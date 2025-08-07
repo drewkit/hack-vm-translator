@@ -208,7 +208,7 @@ getCpuCommands vmCommand index =
             , "@0"
             , "M=M-1 // SP--"
             , "@" ++ labelName
-            , "D;JGT"
+            , "D;JNE"
             ]
 
         Goto labelName ->
@@ -277,16 +277,47 @@ getCpuCommands vmCommand index =
                    ]
 
         FunctionReturn ->
-            [ "@0"
+            let
+                restoreCallerSegment seg negativeOffset =
+                    [ "@" ++ String.fromInt negativeOffset
+                    , "D=A"
+                    , "@R13"
+                    , "A=M-D"
+                    , "D=M // D = *(endFrame - offset)"
+                    , "@" ++ String.fromInt (getSegmentBaseRegister seg)
+                    , "M=D // SEG = *(endFrame - offset)"
+                    ]
+            in
+            [ "@" ++ String.fromInt (getSegmentBaseRegister Local)
+            , "D=M"
+            , "@R13"
+            , "M=D // endFrame = LCL = R13"
+            , "@5"
+            , "D=M-A"
+            , "A=M"
+            , "D=M"
+            , "@R14"
+            , "M=D // *(endFrame - 5) = R14 = returnInstructionAddress"
+            , "@0"
             , "A=M-1"
             , "D=M"
             , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
             , "A=M"
-            , "M=D // return value to callee"
-            , "D=A+1"
+            , "M=D // *ARG = pop() -- puts the return value at the top of the caller stack"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+            , "D=M"
             , "@0"
-            , "M=D // SP = returnAddress + 1"
+            , "M=D+1 // SP = ARG + 1 -- reposition stack pointer to caller stack"
+            , ""
             ]
+                ++ restoreCallerSegment That 1
+                ++ restoreCallerSegment This 2
+                ++ restoreCallerSegment Argument 3
+                ++ restoreCallerSegment Local 4
+                ++ [ "@R14"
+                   , "A=M"
+                   , "0:JMP // jump to return instruction address"
+                   ]
 
         BinaryArithmetic op ->
             -- first operand is stored to R14
@@ -474,22 +505,7 @@ getCpuCommands vmCommand index =
                     ]
 
                 Pointer ->
-                    let
-                        pointerBase =
-                            getSegmentBaseRegister Pointer
-
-                        pointerRegister =
-                            case i of
-                                0 ->
-                                    pointerBase
-
-                                1 ->
-                                    pointerBase + 1
-
-                                _ ->
-                                    pointerBase
-                    in
-                    nonPointingSegmentPush pointerRegister
+                    nonPointingSegmentPush (getSegmentBaseRegister Pointer)
 
                 Static ->
                     nonPointingSegmentPush staticBaseRegister
