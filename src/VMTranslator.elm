@@ -1,6 +1,6 @@
 module VMTranslator exposing (translate)
 
-import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed, variable)
+import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed)
 import VMCommand
     exposing
         ( BinaryArithmeticCmd(..)

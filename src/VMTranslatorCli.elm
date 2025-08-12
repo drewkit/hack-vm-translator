@@ -10,7 +10,7 @@ import VMTranslator exposing (translate)
 
 
 type alias CliOptions =
-    { filename : String }
+    { target : Maybe String }
 
 
 scriptConfig : Program.Config CliOptions
@@ -18,35 +18,54 @@ scriptConfig =
     Program.config
         |> Program.add
             (OptionsParser.build CliOptions
-                |> OptionsParser.with
-                    (Option.requiredPositionalArg "filename")
-                |> OptionsParser.end
-                |> OptionsParser.withDoc "Provide a filename to translate Hack VM commands to Hack assembly code"
+                |> OptionsParser.withOptionalPositionalArg
+                    (Option.optionalPositionalArg "target")
             )
+
+
+
+-- |> OptionsParser.withDoc "Provide a filename or directory to translate Hack VM commands to Hack assembly code"
 
 
 run : Script
 run =
     Script.withCliOptions scriptConfig
-        (\{ filename } ->
+        (\{ target } ->
+            let
+                files : List String
+                files =
+                    case target of
+                        Nothing ->
+                            []
+
+                        Just val ->
+                            if String.endsWith ".vm" val then
+                                String.split ".vm" val
+                                    |> List.head
+                                    |> Maybe.withDefault "outputFile"
+                                    |> (\nameWithoutExtension -> nameWithoutExtension ++ ".asm")
+                                    |> (\r -> [ r ])
+
+                            else
+                                -- process directory
+                                []
+
+                filename : String
+                filename =
+                    List.head files
+                        |> Maybe.withDefault "filename"
+            in
             File.rawFile filename
                 |> BackendTask.allowFatal
                 |> BackendTask.andThen
                     (\file ->
                         let
-                            outputFilename : String
-                            outputFilename =
-                                String.split ".vm" filename
-                                    |> List.head
-                                    |> Maybe.withDefault "outputFile"
-                                    |> (\nameWithoutExtension -> nameWithoutExtension ++ ".asm")
-
                             output : String
                             output =
                                 translate file
                         in
                         Script.writeFile
-                            { path = outputFilename, body = output }
+                            { path = filename, body = output }
                             |> BackendTask.allowFatal
                     )
         )
