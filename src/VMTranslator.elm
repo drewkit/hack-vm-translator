@@ -40,7 +40,10 @@ translateLine index line =
             line
                 |> Parser.run
                     (oneOf
-                        [ pushParser
+                        [ functionCallParser
+                        , functionDeclarationParser
+                        , functionReturnParser
+                        , pushParser
                         , popParser
                         , addParser
                         , subParser
@@ -71,6 +74,32 @@ translateLine index line =
 
         Err _ ->
             [ "// !!!!! could not process line: " ++ line ]
+
+
+functionCallParser : Parser VMCommand
+functionCallParser =
+    succeed FunctionCall
+        |. keyword "call"
+        |. spaces
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |. spaces
+        |= int
+
+
+functionDeclarationParser : Parser VMCommand
+functionDeclarationParser =
+    succeed FunctionDeclaration
+        |. keyword "function"
+        |. spaces
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |. spaces
+        |= int
+
+
+functionReturnParser : Parser VMCommand
+functionReturnParser =
+    succeed FunctionReturn
+        |. keyword "return"
 
 
 pushParser : Parser VMCommand
@@ -195,7 +224,7 @@ gotoParser =
 
 charIsAlphaNumorUnderscore : Char -> Bool
 charIsAlphaNumorUnderscore c =
-    Char.isAlphaNum c || c == '_'
+    Char.isAlphaNum c || c == '_' || c == '.'
 
 
 commentParser : Parser VMCommand

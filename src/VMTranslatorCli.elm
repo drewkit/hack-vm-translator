@@ -59,9 +59,13 @@ run =
     Script.withCliOptions scriptConfig
         (\cliOptions ->
             let
+                translationStrategy : TranslationStrategy
+                translationStrategy =
+                    getTranslationStrategy cliOptions
+
                 filePaths : BackendTask.BackendTask error (List String)
                 filePaths =
-                    case getTranslationStrategy cliOptions of
+                    case translationStrategy of
                         FilePathSpecified path ->
                             [ path ] |> BackendTask.succeed
 
@@ -83,7 +87,7 @@ run =
 
                 outputFilePath : String
                 outputFilePath =
-                    case getTranslationStrategy cliOptions of
+                    case translationStrategy of
                         FilePathSpecified path ->
                             String.replace ".vm" ".asm" path
 
@@ -124,12 +128,38 @@ run =
                                         )
                                     |> BackendTask.combine
                             )
+
+                headers =
+                    let
+                        bootstrappedSysInitCommands =
+                            String.join "\n"
+                                [ "// Bootstrapping Sys.init"
+                                , "@256"
+                                , "D=A"
+                                , "@0"
+                                , "M=D // SP = 256"
+                                , "@Sys.init"
+                                , "0;JMP // call Sys.init (no arguments)"
+                                ]
+                    in
+                    case translationStrategy of
+                        FilePathSpecified _ ->
+                            ""
+
+                        DirectoryPathSpecified _ ->
+                            bootstrappedSysInitCommands
+
+                        CurrentDirectoryDefault ->
+                            bootstrappedSysInitCommands
             in
             fileReads
                 |> BackendTask.map (\strs -> String.join "\n\n" strs)
                 |> BackendTask.andThen
                     (\content ->
-                        Script.writeFile { path = outputFilePath, body = translate content }
+                        Script.writeFile
+                            { path = outputFilePath
+                            , body = headers ++ translate content
+                            }
                             |> BackendTask.allowFatal
                     )
         )

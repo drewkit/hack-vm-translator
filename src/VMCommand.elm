@@ -243,7 +243,7 @@ getCpuCommands vmCommand index =
         FunctionCall fName nArgs ->
             let
                 returnLabel =
-                    fName ++ "$ret. " ++ String.fromInt index
+                    fName ++ ".RETURN." ++ String.fromInt index
 
                 pushSavedSegment : Segment -> List String
                 pushSavedSegment seg =
@@ -254,7 +254,7 @@ getCpuCommands vmCommand index =
                     , "A=M"
                     , "M=D // pushed caller " ++ segToStr seg ++ " segment to stack"
                     , "@0"
-                    , "M=M=1 // SP++"
+                    , "M=M+1 // SP++"
                     ]
             in
             [ "@" ++ returnLabel
@@ -323,7 +323,7 @@ getCpuCommands vmCommand index =
                 ++ restoreCallerSegment Local 4
                 ++ [ "@R14"
                    , "A=M"
-                   , "0:JMP // jump to return instruction address"
+                   , "0;JMP // jump to return instruction address"
                    ]
 
         BinaryArithmetic op ->
