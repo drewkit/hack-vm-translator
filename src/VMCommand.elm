@@ -131,7 +131,8 @@ getSegmentBaseRegister seg =
             4
 
         _ ->
-            -1
+            Debug.log "UNKNOWN SEGMENT BASE REGISTER!"
+                -1
 
 
 staticBaseRegister : Int
@@ -300,7 +301,7 @@ getCpuCommands vmCommand index =
             , "@R13"
             , "M=D // endFrame = LCL = R13"
             , "@5"
-            , "D=M-A"
+            , "A=D-A"
             , "A=M"
             , "D=M"
             , "@R14"
@@ -449,7 +450,8 @@ getCpuCommands vmCommand index =
             in
             case seg of
                 Constant ->
-                    []
+                    Debug.log "!! Attempt made to Pop from Constant segment (not possible)"
+                        []
 
                 Pointer ->
                     let
@@ -464,7 +466,16 @@ getCpuCommands vmCommand index =
                 Temp ->
                     nonPointingSegmentPop tempBaseRegister
 
-                _ ->
+                Local ->
+                    pointingSegmentPop
+
+                Argument ->
+                    pointingSegmentPop
+
+                This ->
+                    pointingSegmentPop
+
+                That ->
                     pointingSegmentPop
 
         Push seg i ->
@@ -520,5 +531,14 @@ getCpuCommands vmCommand index =
                 Temp ->
                     nonPointingSegmentPush tempBaseRegister
 
-                _ ->
+                Local ->
+                    pointingSegmentPush
+
+                Argument ->
+                    pointingSegmentPush
+
+                This ->
+                    pointingSegmentPush
+
+                That ->
                     pointingSegmentPush
