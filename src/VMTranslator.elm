@@ -73,7 +73,11 @@ translateLine index line =
             commentLine :: asmCommands
 
         Err _ ->
-            [ "// !!!!! could not process line: " ++ line ]
+            let
+                message =
+                    "// !!!!! could not process line: " ++ line
+            in
+            [ Debug.log message message ]
 
 
 functionCallParser : Parser VMCommand
@@ -81,7 +85,7 @@ functionCallParser =
     succeed FunctionCall
         |. keyword "call"
         |. spaces
-        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
         |. spaces
         |= int
 
@@ -91,7 +95,7 @@ functionDeclarationParser =
     succeed FunctionDeclaration
         |. keyword "function"
         |. spaces
-        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
         |. spaces
         |= int
 
@@ -203,7 +207,7 @@ labelParser =
     succeed Label
         |. keyword "label"
         |. spaces
-        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
 
 
 ifGotoParser : Parser VMCommand
@@ -211,7 +215,7 @@ ifGotoParser =
     succeed IfGoto
         |. keyword "if-goto"
         |. spaces
-        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
 
 
 gotoParser : Parser VMCommand
@@ -219,11 +223,11 @@ gotoParser =
     succeed Goto
         |. keyword "goto"
         |. spaces
-        |= getChompedString (chompWhile charIsAlphaNumorUnderscore)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
 
 
-charIsAlphaNumorUnderscore : Char -> Bool
-charIsAlphaNumorUnderscore c =
+charIsAlphaNumorUnderscoreOrPeriod : Char -> Bool
+charIsAlphaNumorUnderscoreOrPeriod c =
     Char.isAlphaNum c || c == '_' || c == '.'
 
 

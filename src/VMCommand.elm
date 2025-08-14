@@ -130,8 +130,11 @@ getSegmentBaseRegister seg =
         That ->
             4
 
+        Temp ->
+            5
+
         _ ->
-            Debug.log "UNKNOWN SEGMENT BASE REGISTER!"
+            Debug.log ("UNKNOWN SEGMENT BASE REGISTER -- " ++ segToStr seg)
                 -1
 
 
@@ -494,10 +497,10 @@ getCpuCommands vmCommand index =
                     , "M=M+1 // SP++"
                     ]
 
-                pointingSegmentPush =
+                pointingSegmentPush segName =
                     let
                         segmentBaseRegister =
-                            getSegmentBaseRegister seg
+                            getSegmentBaseRegister segName
                     in
                     [ "@" ++ String.fromInt i
                     , "D=A"
@@ -532,13 +535,13 @@ getCpuCommands vmCommand index =
                     nonPointingSegmentPush tempBaseRegister
 
                 Local ->
-                    pointingSegmentPush
+                    pointingSegmentPush seg
 
                 Argument ->
-                    pointingSegmentPush
+                    pointingSegmentPush seg
 
                 This ->
-                    pointingSegmentPush
+                    pointingSegmentPush seg
 
                 That ->
-                    pointingSegmentPush
+                    pointingSegmentPush seg
