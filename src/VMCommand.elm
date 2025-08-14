@@ -46,6 +46,7 @@ type VMCommand
     | FunctionDeclaration String Int
     | FunctionCall String Int
     | FunctionReturn
+    | Comment String
 
 
 segToStr : Segment -> String
@@ -180,10 +181,16 @@ getCommentLine command =
         FunctionReturn ->
             commentCode ++ "return"
 
+        Comment content ->
+            commentCode ++ content
+
 
 getCpuCommands : VMCommand -> Int -> List String
 getCpuCommands vmCommand index =
     case vmCommand of
+        Comment _ ->
+            []
+
         UnaryArithmetic op ->
             case op of
                 Neg ->

@@ -21,8 +21,6 @@ translate rawInput =
         |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
-        |> List.filter
-            (\line -> not <| String.startsWith "//" line)
         |> List.indexedMap
             (\i line ->
                 line
@@ -56,6 +54,7 @@ translateLine index line =
                         , labelParser
                         , ifGotoParser
                         , gotoParser
+                        , commentParser
                         ]
                     )
     in
@@ -197,3 +196,16 @@ gotoParser =
 charIsAlphaNumorUnderscore : Char -> Bool
 charIsAlphaNumorUnderscore c =
     Char.isAlphaNum c || c == '_'
+
+
+commentParser : Parser VMCommand
+commentParser =
+    succeed Comment
+        |. keyword "//"
+        |. spaces
+        |= getChompedString (chompWhile charIsNotNewline)
+
+
+charIsNotNewline : Char -> Bool
+charIsNotNewline c =
+    (c /= Char.fromCode 10) && (c /= Char.fromCode 13)

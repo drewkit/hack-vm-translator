@@ -2,9 +2,11 @@ module VMTranslatorCli exposing (run)
 
 import BackendTask
 import BackendTask.File as File
+import BackendTask.Glob as Glob
 import Cli.Option as Option
 import Cli.OptionsParser as OptionsParser
 import Cli.Program as Program
+import FatalError exposing (FatalError)
 import Pages.Script as Script exposing (Script)
 import VMTranslator exposing (translate)
 
@@ -23,49 +25,111 @@ scriptConfig =
             )
 
 
+type TranslationStrategy
+    = FilePathSpecified String
+    | DirectoryPathSpecified String
+    | CurrentDirectoryDefault
 
--- |> OptionsParser.withDoc "Provide a filename or directory to translate Hack VM commands to Hack assembly code"
+
+getTranslationStrategy : CliOptions -> TranslationStrategy
+getTranslationStrategy cliOptions =
+    case cliOptions.target of
+        Nothing ->
+            CurrentDirectoryDefault
+
+        Just path ->
+            if String.endsWith ".vm" path then
+                FilePathSpecified path
+
+            else
+                DirectoryPathSpecified path
+
+
+getFileNameFromPath : String -> String
+getFileNameFromPath str =
+    str
+        |> String.split "/"
+        |> List.reverse
+        |> List.head
+        |> Maybe.withDefault "FileNotFound"
 
 
 run : Script
 run =
     Script.withCliOptions scriptConfig
-        (\{ target } ->
+        (\cliOptions ->
             let
-                files : List String
-                files =
-                    case target of
-                        Nothing ->
-                            []
+                filePaths : BackendTask.BackendTask error (List String)
+                filePaths =
+                    case getTranslationStrategy cliOptions of
+                        FilePathSpecified path ->
+                            [ path ] |> BackendTask.succeed
 
-                        Just val ->
-                            if String.endsWith ".vm" val then
-                                String.split ".vm" val
-                                    |> List.head
-                                    |> Maybe.withDefault "outputFile"
-                                    |> (\nameWithoutExtension -> nameWithoutExtension ++ ".asm")
-                                    |> (\r -> [ r ])
+                        DirectoryPathSpecified path ->
+                            let
+                                directoryPathEndingWithForwardSlash =
+                                    if String.endsWith "/" path then
+                                        path
+
+                                    else
+                                        path ++ "/"
+                            in
+                            Glob.fromString <|
+                                directoryPathEndingWithForwardSlash
+                                    ++ "*.vm"
+
+                        CurrentDirectoryDefault ->
+                            Glob.fromString "*.vm"
+
+                outputFilePath : String
+                outputFilePath =
+                    case getTranslationStrategy cliOptions of
+                        FilePathSpecified path ->
+                            String.replace ".vm" ".asm" path
+
+                        DirectoryPathSpecified path ->
+                            let
+                                fileName =
+                                    path
+                                        |> String.split "/"
+                                        |> List.reverse
+                                        |> List.head
+                                        |> Maybe.withDefault "Default"
+                                        |> (\str -> str ++ ".asm")
+                            in
+                            if String.endsWith "/" path then
+                                path ++ fileName
 
                             else
-                                -- process directory
-                                []
+                                path ++ "/" ++ fileName
 
-                filename : String
-                filename =
-                    List.head files
-                        |> Maybe.withDefault "filename"
+                        CurrentDirectoryDefault ->
+                            "vm_translated.asm"
+
+                fileReads : BackendTask.BackendTask FatalError (List String)
+                fileReads =
+                    filePaths
+                        |> BackendTask.andThen
+                            (\files ->
+                                files
+                                    |> List.map
+                                        (\f ->
+                                            File.rawFile f
+                                                |> BackendTask.allowFatal
+                                                |> BackendTask.map
+                                                    (\content ->
+                                                        -- generate comment code vm file name
+                                                        "// " ++ getFileNameFromPath f ++ "\n\n" ++ content
+                                                    )
+                                        )
+                                    |> BackendTask.combine
+                            )
             in
-            File.rawFile filename
-                |> BackendTask.allowFatal
+            fileReads
+                |> BackendTask.map (\strs -> String.join "\n\n" strs)
                 |> BackendTask.andThen
-                    (\file ->
-                        let
-                            output : String
-                            output =
-                                translate file
-                        in
-                        Script.writeFile
-                            { path = filename, body = output }
+                    (\content ->
+                        Script.writeFile { path = outputFilePath, body = translate content }
                             |> BackendTask.allowFatal
                     )
         )
