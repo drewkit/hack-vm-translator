@@ -21,15 +21,16 @@ translate rawInput =
         |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
+        |> List.filter
+            (\line -> not <| String.startsWith "//" line)
         |> List.indexedMap
             (\i line ->
                 line
                     |> translateLine i
+                    |> List.filter (\l -> String.trim l /= "")
                     |> String.join "\n"
-                    |> (\l -> l ++ "\n")
             )
         |> String.join "\n"
-        |> (++) "\n"
 
 
 translateLine : Int -> String -> List String
@@ -70,12 +71,17 @@ translateLine index line =
                 asmCommands =
                     getCpuCommands command index
             in
-            commentLine :: asmCommands
+            case asmCommands of
+                firstCommand :: rest ->
+                    (firstCommand ++ " " ++ commentLine) :: rest
+
+                [] ->
+                    []
 
         Err _ ->
             let
                 message =
-                    "// !!!!! could not process line: " ++ line
+                    "// !!!!! could not process command: " ++ line
             in
             Debug.log message []
 

@@ -182,8 +182,9 @@ getCommentLine command =
         FunctionReturn ->
             commentCode ++ "return"
 
-        Comment content ->
-            commentCode ++ content
+        Comment _ ->
+            -- commentCode ++ content
+            ""
 
 
 getCpuCommands : VMCommand -> Int -> List String
@@ -229,105 +230,124 @@ getCpuCommands vmCommand index =
                 pushLocalVar =
                     [ "@0"
                     , "A=M"
-                    , "M=0 // *SP = 0"
+                    , "M=0"
                     , "@0"
-                    , "M=M+1"
+                    , "M=M+1 // push 0"
                     ]
 
                 initVars : Int -> List String
                 initVars n =
                     List.range 0 (n - 1)
                         |> List.foldl (\_ rest -> pushLocalVar ++ rest) []
-
-                -- initVars _ =
-                --     []
             in
             ("(" ++ fName ++ ")") :: initVars nVars
 
         FunctionCall fName nArgs ->
             let
                 returnLabel =
-                    fName ++ ".RETURN." ++ String.fromInt index
+                    fName ++ "_RETURN_" ++ String.fromInt index
 
                 pushSavedSegment : Segment -> List String
                 pushSavedSegment seg =
-                    [ "@" ++ (String.fromInt <| getSegmentBaseRegister seg)
-                    , "A=M"
-                    , "D=M"
-                    , "@0"
-                    , "A=M"
-                    , "M=D // pushed caller " ++ segToStr seg ++ " segment to stack"
-                    , "@0"
-                    , "M=M+1 // SP++"
-                    ]
+                    let
+                        stackSegment segName =
+                            [ "@" ++ (String.fromInt <| getSegmentBaseRegister segName) ++ " // push caller " ++ segToStr segName
+                            , "A=M"
+                            , "D=M"
+                            , "@0"
+                            , "A=M"
+                            , "M=D"
+                            , "@0"
+                            , "M=M+1"
+                            ]
+                    in
+                    case seg of
+                        Local ->
+                            stackSegment seg
+
+                        Argument ->
+                            stackSegment seg
+
+                        This ->
+                            stackSegment seg
+
+                        That ->
+                            stackSegment seg
+
+                        _ ->
+                            let
+                                msg =
+                                    "pushedSavedSegment attempting to process a non 'stack' segment -- "
+                                        ++ segToStr seg
+                            in
+                            Debug.log msg []
             in
             [ "@" ++ returnLabel
             , "D=A"
             , "@0"
             , "A=M"
-            , "M=D // return address pushed to stack"
+            , "M=D"
             , "@0"
-            , "M=M+1 // SP++"
+            , "M=M+1"
             ]
                 ++ pushSavedSegment Local
                 ++ pushSavedSegment Argument
                 ++ pushSavedSegment This
                 ++ pushSavedSegment That
-                ++ [ "@0"
-                   , "A=M"
+                ++ [ "@" ++ String.fromInt (5 + nArgs) ++ " // ARG = SP - (nArgs + 5)"
+                   , "D=A"
+                   , "@0"
+                   , "D=M-D"
+                   , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+                   , "M=D"
+                   , "@0 // reposition LCL to SP"
                    , "D=M"
                    , "@" ++ String.fromInt (getSegmentBaseRegister Local)
-                   , "M=D // LCL = SP"
-                   , "@" ++ String.fromInt (5 + nArgs)
-                   , "D=D-A"
-                   , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
-                   , "M=D // ARG = SP - 5 - nArgs"
-                   , "@" ++ fName
-                   , "0;JMP"
-                   , "(" ++ returnLabel ++ ")"
+                   , "M=D"
+                   , "@" ++ fName ++ " // jump to " ++ fName
+                   , "0;JMP // goto " ++ fName
+                   , "(" ++ returnLabel ++ ") // return label"
                    ]
 
         FunctionReturn ->
             let
                 restoreCallerSegment seg negativeOffset =
-                    [ "// restore caller memory segment: " ++ segToStr seg
-                    , "@" ++ String.fromInt negativeOffset
+                    [ "@" ++ String.fromInt negativeOffset ++ " // restore caller memory segment: " ++ segToStr seg
                     , "D=A"
                     , "@R11"
                     , "A=M-D"
-                    , "D=M // D = *(endFrame - offset)"
+                    , "D=M"
                     , "@" ++ String.fromInt (getSegmentBaseRegister seg)
-                    , "M=D // SEG = *(endFrame - offset)"
+                    , "M=D"
                     ]
             in
-            [ "@" ++ String.fromInt (getSegmentBaseRegister Local)
+            [ "@" ++ String.fromInt (getSegmentBaseRegister Local) ++ " // endFrame = LCL = R11"
             , "D=M"
             , "@R11"
-            , "M=D // endFrame = LCL = R11"
-            , "@5"
+            , "M=D"
+            , "@5 // *(endFrame - 5) = R12 = returnInstructionAddress"
             , "D=D-A"
             , "@R12"
-            , "M=D // *(endFrame - 5) = R12 = returnInstructionAddress"
-            , "@0"
+            , "M=D"
+            , "@0 // *ARG = pop() -- puts the return value at the top of the caller stack"
             , "A=M-1"
             , "D=M"
             , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
             , "A=M"
-            , "M=D // *ARG = pop() -- puts the return value at the top of the caller stack"
-            , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+            , "M=D"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument) ++ "// SP = ARG + 1 -- reposition stack pointer to caller stack"
             , "D=M"
             , "@0"
-            , "M=D+1 // SP = ARG + 1 -- reposition stack pointer to caller stack"
+            , "M=D+1"
             , ""
             ]
                 ++ restoreCallerSegment That 1
                 ++ restoreCallerSegment This 2
                 ++ restoreCallerSegment Argument 3
                 ++ restoreCallerSegment Local 4
-                ++ [ "\n"
-                   , "@R12"
+                ++ [ "@R12 // jump to return instruction address"
                    , "A=M"
-                   , "0;JMP // jump to return instruction address"
+                   , "0;JMP"
                    ]
 
         BinaryArithmetic op ->

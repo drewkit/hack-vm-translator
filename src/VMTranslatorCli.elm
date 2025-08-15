@@ -120,11 +120,11 @@ run =
                                         (\f ->
                                             File.rawFile f
                                                 |> BackendTask.allowFatal
-                                                |> BackendTask.map
-                                                    (\content ->
-                                                        -- generate comment code vm file name
-                                                        "// " ++ getFileNameFromPath f ++ "\n\n" ++ content
-                                                    )
+                                         -- |> BackendTask.map
+                                         --     (\content ->
+                                         --         -- generate comment code vm file name
+                                         --         "// " ++ getFileNameFromPath f ++ "\n\n" ++ content
+                                         --     )
                                         )
                                     |> BackendTask.combine
                             )
@@ -133,8 +133,7 @@ run =
                     let
                         bootstrappedSysInitCommands =
                             String.join "\n"
-                                [ "// Bootstrapping Sys.init"
-                                , "@256"
+                                [ "@256 // Bootstrapping Sys.init"
                                 , "D=A"
                                 , "@0"
                                 , "M=D"
@@ -143,15 +142,6 @@ run =
                     in
                     case translationStrategy of
                         FilePathSpecified _ ->
-                            -- String.join "\n"
-                            --     [ "// Bootstrapping single file Sys.init"
-                            --     , "@261"
-                            --     , "D=A"
-                            --     , "@0"
-                            --     , "M=D"
-                            --     , "@Sys.init"
-                            --     , "0;JMP"
-                            --     ]
                             ""
 
                         DirectoryPathSpecified _ ->
