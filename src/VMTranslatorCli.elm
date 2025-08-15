@@ -137,13 +137,21 @@ run =
                                 , "@256"
                                 , "D=A"
                                 , "@0"
-                                , "M=D // SP = 256"
-                                , "@Sys.init"
-                                , "0;JMP // call Sys.init (no arguments)"
+                                , "M=D"
                                 ]
+                                ++ translate "call Sys.init 0"
                     in
                     case translationStrategy of
                         FilePathSpecified _ ->
+                            -- String.join "\n"
+                            --     [ "// Bootstrapping single file Sys.init"
+                            --     , "@261"
+                            --     , "D=A"
+                            --     , "@0"
+                            --     , "M=D"
+                            --     , "@Sys.init"
+                            --     , "0;JMP"
+                            --     ]
                             ""
 
                         DirectoryPathSpecified _ ->

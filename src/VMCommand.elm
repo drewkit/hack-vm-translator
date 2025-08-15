@@ -130,9 +130,6 @@ getSegmentBaseRegister seg =
         That ->
             4
 
-        Temp ->
-            5
-
         _ ->
             Debug.log ("UNKNOWN SEGMENT BASE REGISTER -- " ++ segToStr seg)
                 -1
@@ -229,18 +226,19 @@ getCpuCommands vmCommand index =
 
         FunctionDeclaration fName nVars ->
             let
-                initVar =
-                    [ "@0"
-                    , "A=M"
-                    , "M=0 // *SP = 0"
-                    , "@0"
-                    , "M=M+1 // SP++"
-                    ]
-
-                initVars : Int -> List String
-                initVars n =
-                    List.range 0 (n - 1)
-                        |> List.foldl (\_ rest -> initVar ++ rest) []
+                -- pushLocalVar =
+                --     [ "@0"
+                --     , "A=M"
+                --     , "M=0 // *SP = 0"
+                --     , "@0"
+                --     , "M=M+1"
+                --     ]
+                -- initVars : Int -> List String
+                -- initVars n =
+                --     List.range 0 (n - 1)
+                --         |> List.foldl (\_ rest -> pushLocalVar ++ rest) []
+                initVars _ =
+                    []
             in
             ("(" ++ fName ++ ")") :: initVars nVars
 
@@ -290,9 +288,10 @@ getCpuCommands vmCommand index =
         FunctionReturn ->
             let
                 restoreCallerSegment seg negativeOffset =
-                    [ "@" ++ String.fromInt negativeOffset
+                    [ "// restore caller memory segment: " ++ segToStr seg
+                    , "@" ++ String.fromInt negativeOffset
                     , "D=A"
-                    , "@R13"
+                    , "@R5"
                     , "A=M-D"
                     , "D=M // D = *(endFrame - offset)"
                     , "@" ++ String.fromInt (getSegmentBaseRegister seg)
@@ -301,14 +300,12 @@ getCpuCommands vmCommand index =
             in
             [ "@" ++ String.fromInt (getSegmentBaseRegister Local)
             , "D=M"
-            , "@R13"
-            , "M=D // endFrame = LCL = R13"
+            , "@R5"
+            , "M=D // endFrame = LCL = R5"
             , "@5"
-            , "A=D-A"
-            , "A=M"
-            , "D=M"
-            , "@R14"
-            , "M=D // *(endFrame - 5) = R14 = returnInstructionAddress"
+            , "D=D-A"
+            , "@R6"
+            , "M=D // *(endFrame - 5) = R6 = returnInstructionAddress"
             , "@0"
             , "A=M-1"
             , "D=M"
@@ -325,7 +322,8 @@ getCpuCommands vmCommand index =
                 ++ restoreCallerSegment This 2
                 ++ restoreCallerSegment Argument 3
                 ++ restoreCallerSegment Local 4
-                ++ [ "@R14"
+                ++ [ "\n"
+                   , "@R6"
                    , "A=M"
                    , "0;JMP // jump to return instruction address"
                    ]
@@ -431,10 +429,10 @@ getCpuCommands vmCommand index =
                     , "M=M-1 // SP--"
                     ]
 
-                pointingSegmentPop =
+                pointingSegmentPop segName =
                     let
                         segmentBaseRegister =
-                            getSegmentBaseRegister seg
+                            getSegmentBaseRegister segName
                     in
                     [ "@" ++ String.fromInt i
                     , "D=A"
@@ -470,16 +468,16 @@ getCpuCommands vmCommand index =
                     nonPointingSegmentPop tempBaseRegister
 
                 Local ->
-                    pointingSegmentPop
+                    pointingSegmentPop seg
 
                 Argument ->
-                    pointingSegmentPop
+                    pointingSegmentPop seg
 
                 This ->
-                    pointingSegmentPop
+                    pointingSegmentPop seg
 
                 That ->
-                    pointingSegmentPop
+                    pointingSegmentPop seg
 
         Push seg i ->
             let

@@ -77,7 +77,7 @@ translateLine index line =
                 message =
                     "// !!!!! could not process line: " ++ line
             in
-            [ Debug.log message message ]
+            Debug.log message []
 
 
 functionCallParser : Parser VMCommand
