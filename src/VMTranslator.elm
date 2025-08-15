@@ -31,6 +31,7 @@ translate rawInput =
                     |> String.join "\n"
             )
         |> String.join "\n"
+        |> (++) "\n"
 
 
 translateLine : Int -> String -> List String
@@ -58,8 +59,6 @@ translateLine index line =
                         , labelParser
                         , ifGotoParser
                         , gotoParser
-
-                        -- , commentParser
                         ]
                     )
     in
@@ -236,15 +235,3 @@ gotoParser =
 charIsAlphaNumorUnderscoreOrPeriod : Char -> Bool
 charIsAlphaNumorUnderscoreOrPeriod c =
     Char.isAlphaNum c || c == '_' || c == '.'
-
-
-
--- commentParser : Parser VMCommand
--- commentParser =
---     succeed Comment
---         |. keyword "//"
---         |. spaces
---         |= getChompedString (chompWhile charIsNotNewline)
--- charIsNotNewline : Char -> Bool
--- charIsNotNewline c =
---     (c /= Char.fromCode 10) && (c /= Char.fromCode 13)

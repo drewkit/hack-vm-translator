@@ -120,11 +120,6 @@ run =
                                         (\f ->
                                             File.rawFile f
                                                 |> BackendTask.allowFatal
-                                         -- |> BackendTask.map
-                                         --     (\content ->
-                                         --         -- generate comment code vm file name
-                                         --         "// " ++ getFileNameFromPath f ++ "\n\n" ++ content
-                                         --     )
                                         )
                                     |> BackendTask.combine
                             )

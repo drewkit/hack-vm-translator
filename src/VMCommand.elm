@@ -224,7 +224,7 @@ getCpuCommands vmCommand index =
                     , "A=M"
                     , "M=0"
                     , "@0"
-                    , "M=M+1 // push 0"
+                    , "M=M+1"
                     ]
 
                 initVars : Int -> List String
@@ -298,7 +298,7 @@ getCpuCommands vmCommand index =
                    , "M=D"
                    , "@" ++ fName ++ " // jump to " ++ fName
                    , "0;JMP // goto " ++ fName
-                   , "(" ++ returnLabel ++ ") // return label"
+                   , "(" ++ returnLabel ++ ")"
                    ]
 
         FunctionReturn ->
