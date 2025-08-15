@@ -226,19 +226,21 @@ getCpuCommands vmCommand index =
 
         FunctionDeclaration fName nVars ->
             let
-                -- pushLocalVar =
-                --     [ "@0"
-                --     , "A=M"
-                --     , "M=0 // *SP = 0"
-                --     , "@0"
-                --     , "M=M+1"
-                --     ]
-                -- initVars : Int -> List String
-                -- initVars n =
-                --     List.range 0 (n - 1)
-                --         |> List.foldl (\_ rest -> pushLocalVar ++ rest) []
-                initVars _ =
-                    []
+                pushLocalVar =
+                    [ "@0"
+                    , "A=M"
+                    , "M=0 // *SP = 0"
+                    , "@0"
+                    , "M=M+1"
+                    ]
+
+                initVars : Int -> List String
+                initVars n =
+                    List.range 0 (n - 1)
+                        |> List.foldl (\_ rest -> pushLocalVar ++ rest) []
+
+                -- initVars _ =
+                --     []
             in
             ("(" ++ fName ++ ")") :: initVars nVars
 
@@ -291,7 +293,7 @@ getCpuCommands vmCommand index =
                     [ "// restore caller memory segment: " ++ segToStr seg
                     , "@" ++ String.fromInt negativeOffset
                     , "D=A"
-                    , "@R5"
+                    , "@R11"
                     , "A=M-D"
                     , "D=M // D = *(endFrame - offset)"
                     , "@" ++ String.fromInt (getSegmentBaseRegister seg)
@@ -300,12 +302,12 @@ getCpuCommands vmCommand index =
             in
             [ "@" ++ String.fromInt (getSegmentBaseRegister Local)
             , "D=M"
-            , "@R5"
-            , "M=D // endFrame = LCL = R5"
+            , "@R11"
+            , "M=D // endFrame = LCL = R11"
             , "@5"
             , "D=D-A"
-            , "@R6"
-            , "M=D // *(endFrame - 5) = R6 = returnInstructionAddress"
+            , "@R12"
+            , "M=D // *(endFrame - 5) = R12 = returnInstructionAddress"
             , "@0"
             , "A=M-1"
             , "D=M"
@@ -323,7 +325,7 @@ getCpuCommands vmCommand index =
                 ++ restoreCallerSegment Argument 3
                 ++ restoreCallerSegment Local 4
                 ++ [ "\n"
-                   , "@R6"
+                   , "@R12"
                    , "A=M"
                    , "0;JMP // jump to return instruction address"
                    ]
@@ -420,13 +422,12 @@ getCpuCommands vmCommand index =
                     , "@R13"
                     , "M=D // R13 = (base + i)"
                     , "@0"
-                    , "A=M-1"
-                    , "D=M // *(SP - 1) = D"
+                    , "M=M-1 // SP--"
+                    , "A=M"
+                    , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // *R13 = D, which is equivalent to *(base + i) = D"
-                    , "@0"
-                    , "M=M-1 // SP--"
+                    , "M=D // RAM[segmentBase + i] = *SP"
                     ]
 
                 pointingSegmentPop segName =
@@ -446,7 +447,7 @@ getCpuCommands vmCommand index =
                     , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // *R13 = *SP, which is equivalent to *(base + i) = *SP"
+                    , "M=D // RAM[segmentBase + i] = *SP"
                     ]
             in
             case seg of
