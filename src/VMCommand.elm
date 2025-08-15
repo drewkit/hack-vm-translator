@@ -46,7 +46,6 @@ type VMCommand
     | FunctionDeclaration String Int
     | FunctionCall String Int
     | FunctionReturn
-    | Comment String
 
 
 segToStr : Segment -> String
@@ -148,51 +147,44 @@ tempBaseRegister =
 getCommentLine : VMCommand -> String
 getCommentLine command =
     let
-        commentCode =
-            "// "
+        commentMsg =
+            case command of
+                BinaryArithmetic op ->
+                    binaryOpToStr op
+
+                UnaryArithmetic op ->
+                    unaryOpToStr op
+
+                Pop seg i ->
+                    "pop " ++ segToStr seg ++ " " ++ String.fromInt i
+
+                Push seg i ->
+                    "push " ++ segToStr seg ++ " " ++ String.fromInt i
+
+                Label labelName ->
+                    "label " ++ labelName
+
+                IfGoto labelName ->
+                    "if-goto " ++ labelName
+
+                Goto labelName ->
+                    "goto " ++ labelName
+
+                FunctionCall fName nArgs ->
+                    "call " ++ fName ++ " " ++ String.fromInt nArgs
+
+                FunctionDeclaration fName nVars ->
+                    "function " ++ fName ++ " " ++ String.fromInt nVars
+
+                FunctionReturn ->
+                    "return"
     in
-    case command of
-        BinaryArithmetic op ->
-            commentCode ++ binaryOpToStr op
-
-        UnaryArithmetic op ->
-            commentCode ++ unaryOpToStr op
-
-        Pop seg i ->
-            commentCode ++ "pop " ++ segToStr seg ++ " " ++ String.fromInt i
-
-        Push seg i ->
-            commentCode ++ "push " ++ segToStr seg ++ " " ++ String.fromInt i
-
-        Label labelName ->
-            commentCode ++ "label " ++ labelName
-
-        IfGoto labelName ->
-            commentCode ++ "if-goto " ++ labelName
-
-        Goto labelName ->
-            commentCode ++ "goto " ++ labelName
-
-        FunctionCall fName nArgs ->
-            commentCode ++ "call " ++ fName ++ " " ++ String.fromInt nArgs
-
-        FunctionDeclaration fName nVars ->
-            commentCode ++ "function " ++ fName ++ " " ++ String.fromInt nVars
-
-        FunctionReturn ->
-            commentCode ++ "return"
-
-        Comment _ ->
-            -- commentCode ++ content
-            ""
+    "// " ++ commentMsg
 
 
 getCpuCommands : VMCommand -> Int -> List String
 getCpuCommands vmCommand index =
     case vmCommand of
-        Comment _ ->
-            []
-
         UnaryArithmetic op ->
             case op of
                 Neg ->
@@ -213,9 +205,9 @@ getCpuCommands vmCommand index =
         IfGoto labelName ->
             [ "@0"
             , "A=M-1"
-            , "D=M // D = *(SP - 1)"
+            , "D=M"
             , "@0"
-            , "M=M-1 // SP--"
+            , "M=M-1"
             , "@" ++ labelName
             , "D;JNE"
             ]
@@ -312,7 +304,7 @@ getCpuCommands vmCommand index =
         FunctionReturn ->
             let
                 restoreCallerSegment seg negativeOffset =
-                    [ "@" ++ String.fromInt negativeOffset ++ " // restore caller memory segment: " ++ segToStr seg
+                    [ "@" ++ String.fromInt negativeOffset ++ " // restore segment: " ++ segToStr seg
                     , "D=A"
                     , "@R11"
                     , "A=M-D"
@@ -364,20 +356,20 @@ getCpuCommands vmCommand index =
                     [ "@0"
                     , "D=M-1"
                     , "@R13"
-                    , "M=D // R13 = (SP - 1)"
+                    , "M=D"
                     , "@R14"
-                    , "M=D-1 // R14 = (SP - 2)"
+                    , "M=D-1"
                     ]
 
                 loadSecondOperandToD =
                     [ "@R13"
                     , "A=M"
-                    , "D=M // D = *R13"
+                    , "D=M"
                     ]
 
                 decrementStackPointer =
                     [ "@0"
-                    , "M=M-1 // SP--"
+                    , "M=M-1"
                     ]
 
                 buildBitwiseOperation operation =
@@ -415,7 +407,7 @@ getCpuCommands vmCommand index =
                     buildBitwiseOperation "M=D+M"
 
                 Sub ->
-                    buildBitwiseOperation "M=M-D // *(SP - 2) = *(SP - 2) - *(SP - 1)"
+                    buildBitwiseOperation "M=M-D"
 
                 Or ->
                     buildBitwiseOperation "M=D|M"
@@ -440,14 +432,14 @@ getCpuCommands vmCommand index =
                     , "@" ++ String.fromInt i
                     , "D=D+A"
                     , "@R13"
-                    , "M=D // R13 = (base + i)"
+                    , "M=D"
                     , "@0"
-                    , "M=M-1 // SP--"
+                    , "M=M-1"
                     , "A=M"
                     , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // RAM[segmentBase + i] = *SP"
+                    , "M=D"
                     ]
 
                 pointingSegmentPop segName =
@@ -460,14 +452,14 @@ getCpuCommands vmCommand index =
                     , "@" ++ String.fromInt segmentBaseRegister
                     , "D=D+M"
                     , "@R13"
-                    , "M=D // R13 = (base + i)"
+                    , "M=D"
                     , "@0"
-                    , "M=M-1 // SP--"
+                    , "M=M-1"
                     , "A=M"
                     , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // RAM[segmentBase + i] = *SP"
+                    , "M=D"
                     ]
             in
             case seg of
@@ -508,12 +500,12 @@ getCpuCommands vmCommand index =
                     , "@" ++ String.fromInt segmentBase
                     , "D=D+A"
                     , "A=D"
-                    , "D=M // D = *(base + i)"
+                    , "D=M"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
                     ]
 
                 pointingSegmentPush segName =
@@ -524,24 +516,24 @@ getCpuCommands vmCommand index =
                     [ "@" ++ String.fromInt i
                     , "D=A"
                     , "@" ++ String.fromInt segmentBaseRegister
-                    , "A=D+M // A = (base + i)"
-                    , "D=M // D = *(base + i)"
+                    , "A=D+M"
+                    , "D=M"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
                     ]
             in
             case seg of
                 Constant ->
                     [ "@" ++ String.fromInt i
-                    , "D=A // D = i"
+                    , "D=A"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
                     ]
 
                 Pointer ->
