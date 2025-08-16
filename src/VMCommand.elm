@@ -243,8 +243,7 @@ getCpuCommands vmCommand index =
                 pushSavedSegment seg =
                     let
                         stackSegment segName =
-                            [ "@" ++ (String.fromInt <| getSegmentBaseRegister segName) ++ " // push caller " ++ segToStr segName
-                            , "A=M"
+                            [ "@" ++ (String.fromInt <| getSegmentBaseRegister segName) ++ " // push caller segment: " ++ segToStr segName
                             , "D=M"
                             , "@0"
                             , "A=M"
@@ -327,7 +326,7 @@ getCpuCommands vmCommand index =
             , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
             , "A=M"
             , "M=D"
-            , "@" ++ String.fromInt (getSegmentBaseRegister Argument) ++ "// SP = ARG + 1 -- reposition stack pointer to caller stack"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument) ++ " // SP = ARG + 1 -- reposition stack pointer to caller stack"
             , "D=M"
             , "@0"
             , "M=D+1"

@@ -81,7 +81,7 @@ translateLine index line =
         Err _ ->
             let
                 message =
-                    "// !!!!! could not process command: " ++ line
+                    "!!!!! could not process command: " ++ line
             in
             Debug.log message []
 
