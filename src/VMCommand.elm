@@ -43,6 +43,9 @@ type VMCommand
     | Label String
     | IfGoto String
     | Goto String
+    | FunctionDeclaration String Int
+    | FunctionCall String Int
+    | FunctionReturn
 
 
 segToStr : Segment -> String
@@ -127,7 +130,8 @@ getSegmentBaseRegister seg =
             4
 
         _ ->
-            -1
+            Debug.log ("UNKNOWN SEGMENT BASE REGISTER -- " ++ segToStr seg)
+                -1
 
 
 staticBaseRegister : Int
@@ -143,34 +147,43 @@ tempBaseRegister =
 getCommentLine : VMCommand -> String
 getCommentLine command =
     let
-        commentCode =
-            "// "
+        commentMsg =
+            case command of
+                BinaryArithmetic op ->
+                    binaryOpToStr op
+
+                UnaryArithmetic op ->
+                    unaryOpToStr op
+
+                Pop seg i ->
+                    "pop " ++ segToStr seg ++ " " ++ String.fromInt i
+
+                Push seg i ->
+                    "push " ++ segToStr seg ++ " " ++ String.fromInt i
+
+                Label labelName ->
+                    "label " ++ labelName
+
+                IfGoto labelName ->
+                    "if-goto " ++ labelName
+
+                Goto labelName ->
+                    "goto " ++ labelName
+
+                FunctionCall fName nArgs ->
+                    "call " ++ fName ++ " " ++ String.fromInt nArgs
+
+                FunctionDeclaration fName nVars ->
+                    "function " ++ fName ++ " " ++ String.fromInt nVars
+
+                FunctionReturn ->
+                    "return"
     in
-    case command of
-        BinaryArithmetic op ->
-            commentCode ++ binaryOpToStr op
-
-        UnaryArithmetic op ->
-            commentCode ++ unaryOpToStr op
-
-        Pop seg i ->
-            commentCode ++ "pop " ++ segToStr seg ++ " " ++ String.fromInt i
-
-        Push seg i ->
-            commentCode ++ "push " ++ segToStr seg ++ " " ++ String.fromInt i
-
-        Label labelName ->
-            commentCode ++ "label " ++ labelName
-
-        IfGoto labelName ->
-            commentCode ++ "if-goto " ++ labelName
-
-        Goto labelName ->
-            commentCode ++ "goto " ++ labelName
+    "// " ++ commentMsg
 
 
-getCpuCommands : VMCommand -> Int -> List String
-getCpuCommands vmCommand index =
+getCpuCommands : String -> VMCommand -> Int -> List String
+getCpuCommands fileName vmCommand index =
     case vmCommand of
         UnaryArithmetic op ->
             case op of
@@ -192,17 +205,145 @@ getCpuCommands vmCommand index =
         IfGoto labelName ->
             [ "@0"
             , "A=M-1"
-            , "D=M // D = *(SP - 1)"
+            , "D=M"
             , "@0"
-            , "M=M-1 // SP--"
+            , "M=M-1"
             , "@" ++ labelName
-            , "D;JGT"
+            , "D;JNE"
             ]
 
         Goto labelName ->
             [ "@" ++ labelName
             , "0;JMP"
             ]
+
+        FunctionDeclaration fName nVars ->
+            let
+                pushLocalVar =
+                    [ "@0"
+                    , "A=M"
+                    , "M=0"
+                    , "@0"
+                    , "M=M+1"
+                    ]
+
+                initVars : Int -> List String
+                initVars n =
+                    List.range 0 (n - 1)
+                        |> List.foldl (\_ rest -> pushLocalVar ++ rest) []
+            in
+            ("(" ++ fName ++ ")") :: initVars nVars
+
+        FunctionCall fName nArgs ->
+            let
+                returnLabel =
+                    fName ++ "_RETURN_" ++ String.fromInt index
+
+                pushSavedSegment : Segment -> List String
+                pushSavedSegment seg =
+                    let
+                        stackSegment segName =
+                            [ "@" ++ (String.fromInt <| getSegmentBaseRegister segName) ++ " // push caller segment: " ++ segToStr segName
+                            , "D=M"
+                            , "@0"
+                            , "A=M"
+                            , "M=D"
+                            , "@0"
+                            , "M=M+1"
+                            ]
+                    in
+                    case seg of
+                        Local ->
+                            stackSegment seg
+
+                        Argument ->
+                            stackSegment seg
+
+                        This ->
+                            stackSegment seg
+
+                        That ->
+                            stackSegment seg
+
+                        _ ->
+                            let
+                                msg =
+                                    "pushedSavedSegment attempting to process a non 'stack' segment -- "
+                                        ++ segToStr seg
+                            in
+                            Debug.log msg []
+            in
+            [ "@" ++ returnLabel
+            , "D=A"
+            , "@0"
+            , "A=M"
+            , "M=D"
+            , "@0"
+            , "M=M+1"
+            ]
+                ++ pushSavedSegment Local
+                ++ pushSavedSegment Argument
+                ++ pushSavedSegment This
+                ++ pushSavedSegment That
+                ++ [ "@" ++ String.fromInt (5 + nArgs) ++ " // ARG = SP - (nArgs + 5)"
+                   , "D=A"
+                   , "@0"
+                   , "D=M-D"
+                   , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+                   , "M=D"
+                   , "@0 // reposition LCL to SP"
+                   , "D=M"
+                   , "@" ++ String.fromInt (getSegmentBaseRegister Local)
+                   , "M=D"
+                   , "@" ++ fName ++ " // jump to " ++ fName
+                   , "0;JMP // goto " ++ fName
+                   , "(" ++ returnLabel ++ ")"
+                   ]
+
+        FunctionReturn ->
+            let
+                restoreCallerSegment seg negativeOffset =
+                    [ "@" ++ String.fromInt negativeOffset ++ " // restore segment: " ++ segToStr seg
+                    , "D=A"
+                    , "@R11"
+                    , "A=M-D"
+                    , "D=M"
+                    , "@" ++ String.fromInt (getSegmentBaseRegister seg)
+                    , "M=D"
+                    ]
+            in
+            [ "@" ++ String.fromInt (getSegmentBaseRegister Local) ++ " // endFrame = LCL = R11"
+            , "D=M"
+            , "@R11"
+            , "M=D"
+            , "@5 // *(endFrame - 5) = R12 = returnInstructionAddress"
+            , "D=D-A"
+            , "@R12"
+            , "M=D"
+            , "A=M"
+            , "D=M"
+            , "@R12"
+            , "M=D"
+            , "@0 // *ARG = pop() -- puts the return value at the top of the caller stack"
+            , "A=M-1"
+            , "D=M"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument)
+            , "A=M"
+            , "M=D"
+            , "@" ++ String.fromInt (getSegmentBaseRegister Argument) ++ " // SP = ARG + 1 -- reposition stack pointer to caller stack"
+            , "D=M"
+            , "@0"
+            , "M=D+1"
+            , ""
+            ]
+                ++ restoreCallerSegment That 1
+                ++ restoreCallerSegment This 2
+                ++ restoreCallerSegment Argument 3
+                ++ restoreCallerSegment Local 4
+                ++ [ "@R12 // jump to return instruction address"
+                   , "A=M"
+                   , "0;JMP"
+                   ]
 
         BinaryArithmetic op ->
             -- first operand is stored to R14
@@ -218,20 +359,20 @@ getCpuCommands vmCommand index =
                     [ "@0"
                     , "D=M-1"
                     , "@R13"
-                    , "M=D // R13 = (SP - 1)"
+                    , "M=D"
                     , "@R14"
-                    , "M=D-1 // R14 = (SP - 2)"
+                    , "M=D-1"
                     ]
 
                 loadSecondOperandToD =
                     [ "@R13"
                     , "A=M"
-                    , "D=M // D = *R13"
+                    , "D=M"
                     ]
 
                 decrementStackPointer =
                     [ "@0"
-                    , "M=M-1 // SP--"
+                    , "M=M-1"
                     ]
 
                 buildBitwiseOperation operation =
@@ -269,7 +410,7 @@ getCpuCommands vmCommand index =
                     buildBitwiseOperation "M=D+M"
 
                 Sub ->
-                    buildBitwiseOperation "M=M-D // *(SP - 2) = *(SP - 2) - *(SP - 1)"
+                    buildBitwiseOperation "M=M-D"
 
                 Or ->
                     buildBitwiseOperation "M=D|M"
@@ -294,40 +435,50 @@ getCpuCommands vmCommand index =
                     , "@" ++ String.fromInt i
                     , "D=D+A"
                     , "@R13"
-                    , "M=D // R13 = (base + i)"
+                    , "M=D"
                     , "@0"
-                    , "A=M-1"
-                    , "D=M // *(SP - 1) = D"
+                    , "M=M-1"
+                    , "A=M"
+                    , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // *R13 = D, which is equivalent to *(base + i) = D"
-                    , "@0"
-                    , "M=M-1 // SP--"
+                    , "M=D"
                     ]
 
-                pointingSegmentPop =
+                pointingSegmentPop segName =
                     let
                         segmentBaseRegister =
-                            getSegmentBaseRegister seg
+                            getSegmentBaseRegister segName
                     in
                     [ "@" ++ String.fromInt i
                     , "D=A"
                     , "@" ++ String.fromInt segmentBaseRegister
                     , "D=D+M"
                     , "@R13"
-                    , "M=D // R13 = (base + i)"
+                    , "M=D"
                     , "@0"
-                    , "M=M-1 // SP--"
+                    , "M=M-1"
                     , "A=M"
                     , "D=M"
                     , "@R13"
                     , "A=M"
-                    , "M=D // *R13 = *SP, which is equivalent to *(base + i) = *SP"
+                    , "M=D"
                     ]
             in
             case seg of
                 Constant ->
-                    []
+                    Debug.log "!! Attempt made to Pop from Constant segment (not possible)"
+                        []
+
+                Static ->
+                    [ "@0"
+                    , "M=M-1"
+                    , "@0"
+                    , "A=M"
+                    , "D=M"
+                    , "@" ++ fileName ++ "." ++ String.fromInt i
+                    , "M=D"
+                    ]
 
                 Pointer ->
                     let
@@ -336,14 +487,20 @@ getCpuCommands vmCommand index =
                     in
                     nonPointingSegmentPop pointerBase
 
-                Static ->
-                    nonPointingSegmentPop staticBaseRegister
-
                 Temp ->
                     nonPointingSegmentPop tempBaseRegister
 
-                _ ->
-                    pointingSegmentPop
+                Local ->
+                    pointingSegmentPop seg
+
+                Argument ->
+                    pointingSegmentPop seg
+
+                This ->
+                    pointingSegmentPop seg
+
+                That ->
+                    pointingSegmentPop seg
 
         Push seg i ->
             let
@@ -353,65 +510,66 @@ getCpuCommands vmCommand index =
                     , "@" ++ String.fromInt segmentBase
                     , "D=D+A"
                     , "A=D"
-                    , "D=M // D = *(base + i)"
+                    , "D=M"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
                     ]
 
-                pointingSegmentPush =
+                pointingSegmentPush segName =
                     let
                         segmentBaseRegister =
-                            getSegmentBaseRegister seg
+                            getSegmentBaseRegister segName
                     in
                     [ "@" ++ String.fromInt i
                     , "D=A"
                     , "@" ++ String.fromInt segmentBaseRegister
-                    , "A=D+M // A = (base + i)"
-                    , "D=M // D = *(base + i)"
+                    , "A=D+M"
+                    , "D=M"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
                     ]
             in
             case seg of
                 Constant ->
                     [ "@" ++ String.fromInt i
-                    , "D=A // D = i"
+                    , "D=A"
                     , "@0"
                     , "A=M"
-                    , "M=D // *SP = D"
+                    , "M=D"
                     , "@0"
-                    , "M=M+1 // SP++"
+                    , "M=M+1"
+                    ]
+
+                Static ->
+                    [ "@" ++ fileName ++ "." ++ String.fromInt i
+                    , "D=M"
+                    , "@0"
+                    , "A=M"
+                    , "M=D"
+                    , "@0"
+                    , "M=M+1"
                     ]
 
                 Pointer ->
-                    let
-                        pointerBase =
-                            getSegmentBaseRegister Pointer
-
-                        pointerRegister =
-                            case i of
-                                0 ->
-                                    pointerBase
-
-                                1 ->
-                                    pointerBase + 1
-
-                                _ ->
-                                    pointerBase
-                    in
-                    nonPointingSegmentPush pointerRegister
-
-                Static ->
-                    nonPointingSegmentPush staticBaseRegister
+                    nonPointingSegmentPush (getSegmentBaseRegister Pointer)
 
                 Temp ->
                     nonPointingSegmentPush tempBaseRegister
 
-                _ ->
-                    pointingSegmentPush
+                Local ->
+                    pointingSegmentPush seg
+
+                Argument ->
+                    pointingSegmentPush seg
+
+                This ->
+                    pointingSegmentPush seg
+
+                That ->
+                    pointingSegmentPush seg

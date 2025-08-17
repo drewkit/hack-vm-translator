@@ -1,6 +1,6 @@
-module VMTranslator exposing (translate)
+module VMTranslator exposing (translateFile)
 
-import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed, variable)
+import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed)
 import VMCommand
     exposing
         ( BinaryArithmeticCmd(..)
@@ -13,34 +13,35 @@ import VMCommand
         )
 
 
-translate : String -> String
-translate rawInput =
+translateFile : String -> List String -> List String
+translateFile fileName rawInput =
     rawInput
-        |> String.trim
-        |> String.split "\n"
         |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
+        |> List.filter
+            (\line -> not <| String.startsWith "//" line)
         |> List.indexedMap
             (\i line ->
                 line
-                    |> translateLine i
-                    |> String.join "\n"
-                    |> (\l -> l ++ "\n")
+                    |> translateLine i fileName
+                    |> List.filter (\l -> String.trim l /= "")
             )
-        |> String.join "\n"
-        |> (++) "\n"
+        |> List.foldr (\l acc -> l ++ acc) []
 
 
-translateLine : Int -> String -> List String
-translateLine index line =
+translateLine : Int -> String -> String -> List String
+translateLine index fileName line =
     let
         vmCommand : Result (List Parser.DeadEnd) VMCommand
         vmCommand =
             line
                 |> Parser.run
                     (oneOf
-                        [ pushParser
+                        [ functionCallParser
+                        , functionDeclarationParser
+                        , functionReturnParser
+                        , pushParser
                         , popParser
                         , addParser
                         , subParser
@@ -64,12 +65,47 @@ translateLine index line =
                     getCommentLine command
 
                 asmCommands =
-                    getCpuCommands command index
+                    getCpuCommands fileName command index
             in
-            commentLine :: asmCommands
+            case asmCommands of
+                firstCommand :: rest ->
+                    (firstCommand ++ " " ++ commentLine) :: rest
+
+                [] ->
+                    []
 
         Err _ ->
-            [ "// !!!!! could not process line: " ++ line ]
+            let
+                message =
+                    "!!!!! could not process command: " ++ line
+            in
+            Debug.log message []
+
+
+functionCallParser : Parser VMCommand
+functionCallParser =
+    succeed FunctionCall
+        |. keyword "call"
+        |. spaces
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
+        |. spaces
+        |= int
+
+
+functionDeclarationParser : Parser VMCommand
+functionDeclarationParser =
+    succeed FunctionDeclaration
+        |. keyword "function"
+        |. spaces
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
+        |. spaces
+        |= int
+
+
+functionReturnParser : Parser VMCommand
+functionReturnParser =
+    succeed FunctionReturn
+        |. keyword "return"
 
 
 pushParser : Parser VMCommand
@@ -173,7 +209,7 @@ labelParser =
     succeed Label
         |. keyword "label"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
 
 
 ifGotoParser : Parser VMCommand
@@ -181,7 +217,7 @@ ifGotoParser =
     succeed IfGoto
         |. keyword "if-goto"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
 
 
 gotoParser : Parser VMCommand
@@ -189,4 +225,9 @@ gotoParser =
     succeed Goto
         |. keyword "goto"
         |. spaces
-        |= getChompedString (chompWhile Char.isAlphaNum)
+        |= getChompedString (chompWhile charIsAlphaNumorUnderscoreOrPeriod)
+
+
+charIsAlphaNumorUnderscoreOrPeriod : Char -> Bool
+charIsAlphaNumorUnderscoreOrPeriod c =
+    Char.isAlphaNum c || c == '_' || c == '.'
