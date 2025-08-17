@@ -320,6 +320,10 @@ getCpuCommands vmCommand index =
             , "D=D-A"
             , "@R12"
             , "M=D"
+            , "A=M"
+            , "D=M"
+            , "@R12"
+            , "M=D"
             , "@0 // *ARG = pop() -- puts the return value at the top of the caller stack"
             , "A=M-1"
             , "D=M"
@@ -337,7 +341,6 @@ getCpuCommands vmCommand index =
                 ++ restoreCallerSegment Argument 3
                 ++ restoreCallerSegment Local 4
                 ++ [ "@R12 // jump to return instruction address"
-                   , "A=M"
                    , "A=M"
                    , "0;JMP"
                    ]
