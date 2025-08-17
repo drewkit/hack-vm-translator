@@ -37,21 +37,16 @@ getTranslationStrategy cliOptions =
         Nothing ->
             CurrentDirectoryDefault
 
-        Just path ->
+        Just rawPath ->
+            let
+                path =
+                    String.trim rawPath
+            in
             if String.endsWith ".vm" path then
                 FilePathSpecified path
 
             else
                 DirectoryPathSpecified path
-
-
-getFileNameFromPath : String -> String
-getFileNameFromPath str =
-    str
-        |> String.split "/"
-        |> List.reverse
-        |> List.head
-        |> Maybe.withDefault "FileNotFound"
 
 
 run : Script
@@ -125,33 +120,35 @@ run =
                             )
 
                 headers =
-                    let
-                        bootstrappedSysInitCommands =
-                            String.join "\n"
-                                [ "@256 // Bootstrapping Sys.init"
-                                , "D=A"
-                                , "@0"
-                                , "M=D"
-                                ]
-                                ++ translate "call Sys.init 0"
-                    in
                     case translationStrategy of
                         FilePathSpecified _ ->
-                            ""
+                            []
 
-                        DirectoryPathSpecified _ ->
-                            bootstrappedSysInitCommands
-
-                        CurrentDirectoryDefault ->
-                            bootstrappedSysInitCommands
+                        _ ->
+                            [ "@256 // Bootstrapping Sys.init"
+                            , "D=A"
+                            , "@0"
+                            , "M=D"
+                            ]
+                                ++ translate [ "call Sys.init 0" ]
             in
             fileReads
-                |> BackendTask.map (\strs -> String.join "\n\n" strs)
+                |> BackendTask.map
+                    (\fileStrs ->
+                        fileStrs
+                            |> List.map
+                                (\fileStr ->
+                                    fileStr
+                                        |> String.split "\n"
+                                        |> List.foldr (\a b -> a :: b) []
+                                )
+                            |> List.foldl (\a b -> a ++ b) []
+                    )
                 |> BackendTask.andThen
                     (\content ->
                         Script.writeFile
                             { path = outputFilePath
-                            , body = headers ++ translate content
+                            , body = String.join "\n" (headers ++ translate content)
                             }
                             |> BackendTask.allowFatal
                     )

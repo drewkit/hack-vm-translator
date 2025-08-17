@@ -13,11 +13,9 @@ import VMCommand
         )
 
 
-translate : String -> String
+translate : List String -> List String
 translate rawInput =
     rawInput
-        |> String.trim
-        |> String.split "\n"
         |> List.map String.trim
         |> List.filter
             (\line -> not <| String.isEmpty line)
@@ -28,10 +26,8 @@ translate rawInput =
                 line
                     |> translateLine i
                     |> List.filter (\l -> String.trim l /= "")
-                    |> String.join "\n"
             )
-        |> String.join "\n"
-        |> (++) "\n"
+        |> List.foldr (\l acc -> l ++ acc) []
 
 
 translateLine : Int -> String -> List String
