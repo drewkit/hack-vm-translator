@@ -1,4 +1,4 @@
-module VMTranslator exposing (translate)
+module VMTranslator exposing (translateFile)
 
 import Parser exposing ((|.), (|=), Parser, chompWhile, getChompedString, int, keyword, map, oneOf, spaces, succeed)
 import VMCommand
@@ -13,8 +13,8 @@ import VMCommand
         )
 
 
-translate : List String -> List String
-translate rawInput =
+translateFile : String -> List String -> List String
+translateFile fileName rawInput =
     rawInput
         |> List.map String.trim
         |> List.filter
@@ -24,14 +24,14 @@ translate rawInput =
         |> List.indexedMap
             (\i line ->
                 line
-                    |> translateLine i
+                    |> translateLine i fileName
                     |> List.filter (\l -> String.trim l /= "")
             )
         |> List.foldr (\l acc -> l ++ acc) []
 
 
-translateLine : Int -> String -> List String
-translateLine index line =
+translateLine : Int -> String -> String -> List String
+translateLine index fileName line =
     let
         vmCommand : Result (List Parser.DeadEnd) VMCommand
         vmCommand =
@@ -65,7 +65,7 @@ translateLine index line =
                     getCommentLine command
 
                 asmCommands =
-                    getCpuCommands command index
+                    getCpuCommands fileName command index
             in
             case asmCommands of
                 firstCommand :: rest ->

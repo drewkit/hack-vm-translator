@@ -8,7 +8,7 @@ import Cli.OptionsParser as OptionsParser
 import Cli.Program as Program
 import FatalError exposing (FatalError)
 import Pages.Script as Script exposing (Script)
-import VMTranslator exposing (translate)
+import VMTranslator exposing (translateFile)
 
 
 type alias CliOptions =
@@ -31,6 +31,12 @@ type TranslationStrategy
     | CurrentDirectoryDefault
 
 
+type alias FileData =
+    { data : String
+    , name : String
+    }
+
+
 getTranslationStrategy : CliOptions -> TranslationStrategy
 getTranslationStrategy cliOptions =
     case cliOptions.target of
@@ -47,6 +53,23 @@ getTranslationStrategy cliOptions =
 
             else
                 DirectoryPathSpecified path
+
+
+getFileNameFromPath : String -> String
+getFileNameFromPath str =
+    str
+        |> String.split "/"
+        |> List.reverse
+        |> List.head
+        |> Maybe.withDefault "FileNotFound"
+
+
+removeFileExt : String -> String
+removeFileExt fileName =
+    fileName
+        |> String.split "."
+        |> List.head
+        |> Maybe.withDefault "UnspecifiedFile"
 
 
 run : Script
@@ -105,7 +128,7 @@ run =
                         CurrentDirectoryDefault ->
                             "vm_translated.asm"
 
-                fileReads : BackendTask.BackendTask FatalError (List String)
+                fileReads : BackendTask.BackendTask FatalError (List FileData)
                 fileReads =
                     filePaths
                         |> BackendTask.andThen
@@ -115,6 +138,14 @@ run =
                                         (\f ->
                                             File.rawFile f
                                                 |> BackendTask.allowFatal
+                                                |> BackendTask.map
+                                                    (\ls ->
+                                                        let
+                                                            filename =
+                                                                f |> getFileNameFromPath |> removeFileExt
+                                                        in
+                                                        { data = ls, name = filename }
+                                                    )
                                         )
                                     |> BackendTask.combine
                             )
@@ -130,18 +161,19 @@ run =
                             , "@0"
                             , "M=D"
                             ]
-                                ++ translate [ "call Sys.init 0" ]
+                                ++ translateFile "HeaderFile.vm" [ "call Sys.init 0" ]
             in
             fileReads
                 |> BackendTask.map
-                    (\fileStrs ->
-                        fileStrs
+                    (\dataList ->
+                        dataList
                             |> List.map
                                 -- a lot of work to simply flatten lists of lists
-                                (\fileStr ->
-                                    fileStr
+                                (\data ->
+                                    data.data
                                         |> String.split "\n"
                                         |> List.foldr (\a b -> a :: b) []
+                                        |> translateFile data.name
                                 )
                             |> List.foldl (\a b -> a ++ b) []
                     )
@@ -167,7 +199,7 @@ run =
                                             decoration :: decorateAssemblyWithROMAddr (index + 1) rest
 
                             romAddrDecoratedAssembly =
-                                decorateAssemblyWithROMAddr 0 (headers ++ translate content)
+                                decorateAssemblyWithROMAddr 0 (headers ++ content)
                         in
                         Script.writeFile
                             { path = outputFilePath

@@ -182,8 +182,8 @@ getCommentLine command =
     "// " ++ commentMsg
 
 
-getCpuCommands : VMCommand -> Int -> List String
-getCpuCommands vmCommand index =
+getCpuCommands : String -> VMCommand -> Int -> List String
+getCpuCommands fileName vmCommand index =
     case vmCommand of
         UnaryArithmetic op ->
             case op of
@@ -470,15 +470,22 @@ getCpuCommands vmCommand index =
                     Debug.log "!! Attempt made to Pop from Constant segment (not possible)"
                         []
 
+                Static ->
+                    [ "@0"
+                    , "M=M-1"
+                    , "@0"
+                    , "A=M"
+                    , "D=M"
+                    , "@" ++ fileName ++ "." ++ String.fromInt i
+                    , "M=D"
+                    ]
+
                 Pointer ->
                     let
                         pointerBase =
                             getSegmentBaseRegister Pointer
                     in
                     nonPointingSegmentPop pointerBase
-
-                Static ->
-                    nonPointingSegmentPop staticBaseRegister
 
                 Temp ->
                     nonPointingSegmentPop tempBaseRegister
@@ -539,11 +546,18 @@ getCpuCommands vmCommand index =
                     , "M=M+1"
                     ]
 
+                Static ->
+                    [ "@" ++ fileName ++ "." ++ String.fromInt i
+                    , "D=M"
+                    , "@0"
+                    , "A=M"
+                    , "M=D"
+                    , "@0"
+                    , "M=M+1"
+                    ]
+
                 Pointer ->
                     nonPointingSegmentPush (getSegmentBaseRegister Pointer)
-
-                Static ->
-                    nonPointingSegmentPush staticBaseRegister
 
                 Temp ->
                     nonPointingSegmentPush tempBaseRegister
