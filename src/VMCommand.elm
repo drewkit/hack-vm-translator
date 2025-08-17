@@ -130,13 +130,8 @@ getSegmentBaseRegister seg =
             4
 
         _ ->
-            Debug.log ("UNKNOWN SEGMENT BASE REGISTER -- " ++ segToStr seg)
+            Debug.log ("SEGMENT NOT LCL/ARG/POINTER/THIS/THAT -- " ++ segToStr seg)
                 -1
-
-
-staticBaseRegister : Int
-staticBaseRegister =
-    16
 
 
 tempBaseRegister : Int
@@ -429,19 +424,12 @@ getCpuCommands fileName vmCommand index =
 
         Pop seg i ->
             let
-                nonPointingSegmentPop segmentBase =
-                    [ "@" ++ String.fromInt segmentBase
-                    , "D=A"
-                    , "@" ++ String.fromInt i
-                    , "D=D+A"
-                    , "@R13"
-                    , "M=D"
-                    , "@0"
+                nonPointingSegmentPop addrInstruction =
+                    [ "@0"
                     , "M=M-1"
                     , "A=M"
                     , "D=M"
-                    , "@R13"
-                    , "A=M"
+                    , addrInstruction
                     , "M=D"
                     ]
 
@@ -470,25 +458,18 @@ getCpuCommands fileName vmCommand index =
                     Debug.log "!! Attempt made to Pop from Constant segment (not possible)"
                         []
 
-                Static ->
-                    [ "@0"
-                    , "M=M-1"
-                    , "@0"
-                    , "A=M"
-                    , "D=M"
-                    , "@" ++ fileName ++ "." ++ String.fromInt i
-                    , "M=D"
-                    ]
-
                 Pointer ->
                     let
                         pointerBase =
                             getSegmentBaseRegister Pointer
                     in
-                    nonPointingSegmentPop pointerBase
+                    nonPointingSegmentPop ("@" ++ String.fromInt (pointerBase + i))
 
                 Temp ->
-                    nonPointingSegmentPop tempBaseRegister
+                    nonPointingSegmentPop ("@" ++ String.fromInt (tempBaseRegister + i))
+
+                Static ->
+                    nonPointingSegmentPop ("@" ++ fileName ++ "." ++ String.fromInt i)
 
                 Local ->
                     pointingSegmentPop seg
@@ -504,12 +485,8 @@ getCpuCommands fileName vmCommand index =
 
         Push seg i ->
             let
-                nonPointingSegmentPush segmentBase =
-                    [ "@" ++ String.fromInt i
-                    , "D=A"
-                    , "@" ++ String.fromInt segmentBase
-                    , "D=D+A"
-                    , "A=D"
+                nonPointingSegmentPush addrInstruction =
+                    [ addrInstruction
                     , "D=M"
                     , "@0"
                     , "A=M"
@@ -546,21 +523,18 @@ getCpuCommands fileName vmCommand index =
                     , "M=M+1"
                     ]
 
-                Static ->
-                    [ "@" ++ fileName ++ "." ++ String.fromInt i
-                    , "D=M"
-                    , "@0"
-                    , "A=M"
-                    , "M=D"
-                    , "@0"
-                    , "M=M+1"
-                    ]
-
                 Pointer ->
-                    nonPointingSegmentPush (getSegmentBaseRegister Pointer)
+                    let
+                        pointerBase =
+                            getSegmentBaseRegister Pointer
+                    in
+                    nonPointingSegmentPush ("@" ++ String.fromInt (pointerBase + i))
 
                 Temp ->
-                    nonPointingSegmentPush tempBaseRegister
+                    nonPointingSegmentPush ("@" ++ String.fromInt (tempBaseRegister + i))
+
+                Static ->
+                    nonPointingSegmentPush ("@" ++ fileName ++ "." ++ String.fromInt i)
 
                 Local ->
                     pointingSegmentPush seg
