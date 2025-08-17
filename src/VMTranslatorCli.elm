@@ -137,6 +137,7 @@ run =
                     (\fileStrs ->
                         fileStrs
                             |> List.map
+                                -- a lot of work to simply flatten lists of lists
                                 (\fileStr ->
                                     fileStr
                                         |> String.split "\n"
@@ -146,9 +147,31 @@ run =
                     )
                 |> BackendTask.andThen
                     (\content ->
+                        let
+                            decorateAssemblyWithROMAddr : Int -> List String -> List String
+                            decorateAssemblyWithROMAddr index asmList =
+                                case asmList of
+                                    [] ->
+                                        []
+
+                                    asmInstruction :: rest ->
+                                        if String.startsWith "(" asmInstruction then
+                                            -- don't increment index for assembly label instructions
+                                            asmInstruction :: decorateAssemblyWithROMAddr index rest
+
+                                        else
+                                            let
+                                                decoration =
+                                                    String.padRight 40 ' ' asmInstruction ++ (" // ROM ADDR " ++ String.fromInt index)
+                                            in
+                                            decoration :: decorateAssemblyWithROMAddr (index + 1) rest
+
+                            romAddrDecoratedAssembly =
+                                decorateAssemblyWithROMAddr 0 (headers ++ translate content)
+                        in
                         Script.writeFile
                             { path = outputFilePath
-                            , body = String.join "\n" (headers ++ translate content)
+                            , body = String.join "\n" romAddrDecoratedAssembly
                             }
                             |> BackendTask.allowFatal
                     )
