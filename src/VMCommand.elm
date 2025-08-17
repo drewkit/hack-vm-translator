@@ -338,6 +338,7 @@ getCpuCommands vmCommand index =
                 ++ restoreCallerSegment Local 4
                 ++ [ "@R12 // jump to return instruction address"
                    , "A=M"
+                   , "A=M"
                    , "0;JMP"
                    ]
 
